@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat Application</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
+  <style>
+    body {
+      background: url('https://c4.wallpaperflare.com/wallpaper/855/809/203/references-icons-dark-neon-wallpaper-preview.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    h1,
+    h6,
+    button {
+      color: #e8d9d9;
+    }
+
+    .timestamp {
+      color: black; /* Set timestamp text color to black */
+      font-size: 0.6em;
+    }
+  </style>
+</head>
+
+<body class="bg-warning">
+  <div class="container p-3">
+    <div class="row">
+      <div class="col">
+        <button onclick="logout()" class="btn btn-primary">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="row p-5">
+      <div class="col">
+        <h1 style="text-align: center;">Chat Application</h1>
+      </div>
+    </div>
+
+    <div class="row justify-content-end">
+      <div class="col-6">
+        <h6 style="text-align: right;" id="profile"></h6>
+      </div>
+    </div>
+
+    <div class="accordion accordion-flush" id="accordionFlushExample"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-A3rJD856KowSb7dwlZdYEkO39Gagi7vIsF0jrRAoQmDKKtQBHUuLZ9AsSv4jD4Xa"
+    crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.7.4/web3.min.js"
+    integrity="sha512-oMd9Re3VgJcXuZJn9DN6X7S7JUc7xLYZ2UyZ85Mm/xzaW3lwBr4fV2zjuu/n5jY/Of/2JOx35CTa6zvQNxb31Q=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const abi = [
+      {
+        "anonymous": false,
+        "inputs": [
+          { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
+          { "indexed": false, "internalType": "string", "name": "message", "type": "string" },
+          { "indexed": false, "internalType": "address", "name": "to", "type": "address" },
+          { "indexed": false, "internalType": "string", "name": "timestamp", "type": "string" }
+        ],
+        "name": "message",
+        "type": "event"
+      },
+      {
+        "inputs": [
+          { "internalType": "address", "name": "_to", "type": "address" },
+          { "internalType": "string", "name": "_message", "type": "string" },
+          { "internalType": "string", "name": "time", "type": "string" }
+        ],
+        "name": "sendMessage",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }
+    ];
+
+    const contractAddress = '0xF8b932e94f890DB441E9a548aA2930fF9057E98e';
+    let myAccount = localStorage.getItem("myaddress");
+
+    window.onload = function () {
+      if (!myAccount) {
+        window.location.replace('index.html');
+      } else {
+        loadProfile();
+        loadAccounts();
+      }
+    };
+
+    function logout() {
+      localStorage.removeItem("myaddress");
+      window.location.replace('index.html');
+    }
+
+    function loadProfile() {
+      document.getElementById("profile").textContent = 'Account: ' + myAccount;
+    }
+
+    function loadAccounts() {
+      let web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:7545"));
+      web3.eth.getAccounts(function (error, accounts) {
+        if (error) {
+          console.error(error);
+          alert("Error loading accounts: " + error.message);
+          return;
+        }
+
+        let accountList = '';
+        accounts.forEach(account => {
+          if (account !== myAccount) {
+            accountList += `
+              <div class="accordion-item p-3 border-primary bg-dark">
+                <h2 class="accordion-header" id="flush-heading${account}">
+                  <button id="${account}" class="accordion-button collapsed" type="button" onclick="loadMessages(this)" data-bs-toggle="collapse" data-bs-target="#flush-collapse${account}" aria-expanded="false" aria-controls="flush-collapse${account}">
+                    ${account}
+                  </button>
+                </h2>
+                <div id="flush-collapse${account}" class="accordion-collapse collapse" aria-labelledby="flush-heading${account}" data-bs-parent="#accordionFlushExample">
+                  <div class="accordion-body" id="messagePart${account}">Loading messages...</div>
+                </div>
+              </div>`;
+          }
+        });
+
+        document.getElementById("accordionFlushExample").innerHTML = accountList;
+      });
+    }
+
+    function loadMessages(button) {
+      const accountId = button.id;
+      const messagePartId = "messagePart" + accountId;
+
+      let web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:7545"));
+      let myContract = new web3.eth.Contract(abi, contractAddress);
+
+      myContract.getPastEvents('message', {
+        filter: { from: [myAccount, accountId], to: [myAccount, accountId] },
+        fromBlock: 0,
+        toBlock: 'latest'
+      }, function (error, events) {
+        if (error) {
+          console.error(error);
+          alert("Error loading messages: " + error.message);
+          return;
+        }
+
+        let messages = '';
+        events.forEach(event => {
+          const { from, to, message, timestamp } = event.returnValues;
+          const alignClass = from === myAccount ? 'justify-content-start' : 'justify-content-end';
+          const alertClass = from === myAccount ? 'alert-primary' : 'alert-dark';
+          const timeLabel = from === myAccount ? 'send' : 'received';
+
+          messages += `
+            <div class="row ${alignClass}">
+              <div class="col-4 col-md-auto">
+                <div class="alert ${alertClass}" role="alert">
+                  ${message}
+                  <h6 class="timestamp">${timeLabel} ${timestamp}</h6>
+                </div>
+              </div>
+            </div>`;
+        });
+
+        messages += `
+          <div class="input-group mb-0" id="groupInputButton${accountId}">
+            <input type="text" class="form-control" placeholder="Type message" id="inputButton${accountId}" aria-label="Recipient username" aria-describedby="button-addon2">
+            <button class="btn btn-warning" type="button" onclick="sendMessage(this)" id="button${accountId}" style="padding-top: .55rem;">Send</button>
+          </div>`;
+
+        document.getElementById(messagePartId).innerHTML = messages;
+      });
+    }
+
+    function sendMessage(button) {
+      const to = button.id.split('button')[1];
+      const message = document.getElementById("inputButton" + to).value;
+      const timestamp = new Date().toLocaleString("IN");
+
+      let web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:7545"));
+      let myContract = new web3.eth.Contract(abi, contractAddress);
+
+      myContract.methods.sendMessage(to, message, timestamp).send({ from: myAccount }, function (error, transactionHash) {
+        if (error) {
+          console.error(error);
+          alert("Error sending message: " + error.message);
+          return;
+        }
+
+        const messagePartId = "messagePart" + to;
+        const decoration = `
+          <div class="row justify-content-start">
+            <div class="col-4 col-md-auto">
+              <div class="alert alert-primary" role="alert">
+                ${message}
+                <h6 class="timestamp">send ${timestamp}</h6>
+              </div>
+            </div>
+          </div>`;
+          
+        const groupInputButton = document.getElementById("groupInputButton" + to);
+        groupInputButton.remove();
+        document.getElementById(messagePartId).innerHTML += decoration;
+        document.getElementById(messagePartId).innerHTML += `
+          <div class="input-group mb-0" id="groupInputButton${to}">
+            <input type="text" class="form-control" placeholder="Type message" id="inputButton${to}" aria-label="Recipient username" aria-describedby="button-addon2">
+            <button class="btn btn-warning" type="button" onclick="sendMessage(this)" id="button${to}" style="padding-top: .55rem;">Send</button>
+          </div>`;
+        document.getElementById("groupInputButton" + to).scrollIntoView();
+      });
+    }
+  </script>
+</body>
+
+</html>
